@@ -70,7 +70,7 @@
         const rows = 10;
         const cols = 5;
         let grid = Array.from({ length: rows }, () => Array(cols).fill(null));
-        let selectedCell = null;
+        let draggedCell = null;
         let score = 0;
 
         function createGameArea() {
@@ -80,7 +80,12 @@
                     cell.classList.add('cell', 'empty');
                     cell.dataset.row = row;
                     cell.dataset.col = col;
-                    cell.addEventListener('click', () => handleCellClick(row, col));
+                    cell.setAttribute('draggable', true);
+
+                    cell.addEventListener('dragstart', (e) => handleDragStart(row, col, e));
+                    cell.addEventListener('dragover', (e) => e.preventDefault());
+                    cell.addEventListener('drop', (e) => handleDrop(row, col, e));
+
                     gameArea.appendChild(cell);
                 }
             }
@@ -116,46 +121,75 @@
             }
         }
 
-        function handleCellClick(row, col) {
+        function handleDragStart(row, col, e) {
             if (!grid[row][col]) return;
+            draggedCell = { row, col };
+            e.dataTransfer.setData('text/plain', '');
+        }
 
-            if (selectedCell) {
-                const [selectedRow, selectedCol] = selectedCell;
-                if (row === selectedRow && col === selectedCol) {
-                    // Отменить выбор
-                    selectedCell = null;
-                    updateCell(row, col);
-                } else if (
-                    grid[selectedRow][selectedCol].level === grid[row][col].level &&
-                    isAdjacent(selectedRow, selectedCol, row, col)
-                ) {
-                    // Объединение блоков
-                    grid[row][col].level++;
-                    grid[selectedRow][selectedCol] = null;
-                    score += grid[row][col].level;
-                    scoreDisplay.textContent = `Счет: ${score}`;
-                    updateCell(selectedRow, selectedCol);
-                    updateCell(row, col);
-                    selectedCell = null;
-                } else {
-                    // Выбрать новый блок
-                    selectedCell = [row, col];
-                    updateCell(row, col);
+        function handleDrop(targetRow, targetCol, e) {
+            if (!draggedCell || (draggedCell.row === targetRow && draggedCell.col === targetCol)) {
+                draggedCell = null;
+                return;
+            }
+
+            const sourceRow = draggedCell.row;
+            const sourceCol = draggedCell.col;
+
+            if (grid[targetRow][targetCol] && grid[sourceRow][sourceCol].level === grid[targetRow][targetCol].level) {
+                // Объединение блоков
+                grid[targetRow][targetCol].level++;
+                grid[sourceRow][sourceCol] = null;
+                score += grid[targetRow][targetCol].level;
+                scoreDisplay.textContent = `Счет: ${score}`;
+                updateCell(sourceRow, sourceCol);
+                updateCell(targetRow, targetCol);
+            } else if (!grid[targetRow][targetCol]) {
+                // Перемещение блока
+                grid[targetRow][targetCol] = grid[sourceRow][sourceCol];
+                grid[sourceRow][sourceCol] = null;
+                updateCell(sourceRow, sourceCol);
+                updateCell(targetRow, targetCol);
+            }
+
+            draggedCell = null;
+        }
+
+        function autoMergeBlocks() {
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    if (grid[row][col]) {
+                        // Проверяем соседей справа и снизу
+                        if (col + 1 < cols && grid[row][col + 1] && grid[row][col].level === grid[row][col + 1].level) {
+                            grid[row][col].level++;
+                            grid[row][col + 1] = null;
+                            score += grid[row][col].level;
+                            scoreDisplay.textContent = `Счет: ${score}`;
+                            updateCell(row, col);
+                            updateCell(row, col + 1);
+                        }
+                        if (row + 1 < rows && grid[row + 1][col] && grid[row][col].level === grid[row + 1][col].level) {
+                            grid[row][col].level++;
+                            grid[row + 1][col] = null;
+                            score += grid[row][col].level;
+                            scoreDisplay.textContent = `Счет: ${score}`;
+                            updateCell(row, col);
+                            updateCell(row + 1, col);
+                        }
+                    }
                 }
-            } else {
-                // Выбрать блок
-                selectedCell = [row, col];
-                updateCell(row, col);
             }
         }
 
-        function isAdjacent(row1, col1, row2, col2) {
-            return Math.abs(row1 - row2) + Math.abs(col1 - col2) === 1;
+        function startAutoActions() {
+            setInterval(autoMergeBlocks, 10000); // Автоматическое слияние каждые 10 секунд
+            setInterval(spawnRandomBlock, 8000); // Автоматическое появление блоков каждые 8 секунд
         }
 
         createGameArea();
         spawnRandomBlock();
         spawnRandomBlock();
+        startAutoActions();
     </script>
 
 </body>
